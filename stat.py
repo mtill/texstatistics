@@ -32,8 +32,10 @@ set xtics 24*60*60
 set xtics rotate by 45 right
 set grid ytics lt 0 lw 1 lc rgb "#bbbbbb"
 set grid xtics lt 0 lw 1 lc rgb "#bbbbbb"
-plot '""" + datadir + project + """.gnuplotdata' using 1:2 with linespoints lt 1 lw 2 title 'absolute', \
- '""" + datadir + project + """.gnuplotdata' using 1:3 with linespoints lt 2 lw 2 title 'relative'"""
+set ytics tc lt 1 nomirror
+set y2tics 1 tc lt 2
+plot '""" + datadir + project + """.gnuplotdata' using 1:2 with linespoints axes x1y1 lt 1 lw 2 title 'words (absolute)',\
+ '""" + datadir + project + """.gnuplotdata' using 1:($2/""" + str(approxWordsPerPage) + """) with linespoints axes x1y2 lt 2 lw 2 title 'approx. pages (absolute)'"""
 
 gnuplot_rel = """set terminal pngcairo enhanced dashed color
 set output '""" + datadir + project + """_rel.png'
@@ -46,7 +48,10 @@ set xtics 24*60*60
 set xtics rotate by 45 right
 set grid ytics lt 0 lw 1 lc rgb "#bbbbbb"
 set grid xtics lt 0 lw 1 lc rgb "#bbbbbb"
-plot '""" + datadir + project + """.gnuplotdata' using 1:3 with linespoints lt 2 lw 2 title 'relative'"""
+set ytics tc lt 1 nomirror
+set y2tics 1 tc lt 2
+plot '""" + datadir + project + """.gnuplotdata' using 1:3 with linespoints axes x1y1 lt 1 lw 2 title 'words (relative)',\
+ '""" + datadir + project + """.gnuplotdata' using 1:($3/""" + str(approxWordsPerPage) + """) with linespoints axes x1y2 lt 2 lw 2 title 'approx. pages (relative)'"""
 
 proc = subprocess.Popen("texcount -total -merge " + mainfile, shell=True, stdout=subprocess.PIPE)
 result = {}
@@ -75,7 +80,7 @@ today = time.strftime("%Y-%m-%d")
 data[today] = result
 
 with open(jsonpath, 'w') as jsonfile:
-    json.dump(data, jsonfile)
+    json.dump(data, jsonfile, sort_keys=True, indent=2)
 
 #jsonfile=open(datadir + project + ".json")
 #data = json.load(jsonfile)
@@ -85,16 +90,16 @@ with open(jsonpath, 'w') as jsonfile:
 keys = sorted(data.keys())
 
 oldv = {'Words in text': 0}
-diff = 0;
+diff = 0
 htmlfilepath = datadir + project + ".html"
 gnuplotfilepath = datadir + project + ".gnuplot"
 gnuplotfilepath_rel = datadir + project + ".gnuplot_rel"
 gnuplotdatapath = datadir + project + ".gnuplotdata"
 
-gnuplotdatafile = open(gnuplotdatapath, 'w');
+gnuplotdatafile = open(gnuplotdatapath, 'w')
 for k in keys:
     diff = int(data[k]['Words in text']) - int(oldv['Words in text'])
-    gnuplotdatafile.write(k + "	" + data[k]['Words in text'] + "	" + str(diff) + "\n");
+    gnuplotdatafile.write(k + "\t" + data[k]['Words in text'] + "\t" + str(diff) + "\n")
 
     oldv = data[k]
 
@@ -102,7 +107,7 @@ gnuplotdatafile.close();
 
 donetoday = 'nothing'
 if (data[today]):
-    donetoday = str(diff)
+    donetoday = str(diff) + " words / " + str(round(diff/approxWordsPerPage, 1)) + " pages"
 
 htmlpage = """<!DOCTYPE html>
 <html>
@@ -111,9 +116,8 @@ htmlpage = """<!DOCTYPE html>
 <title>texstatistics</title>
 </head>
 <body>
-<h3>Words</h3>
-<p><b>1 page: approx. """ + str(approxWordsPerPage) + """ words<br>
-today: """ + donetoday + """ words</b></p>
+<h3>texstatistics &mdash; """ + project + """</h3>
+<p><b>today: """ + donetoday + """</b> (approx. """ + str(approxWordsPerPage) + """ words per page)</p>
 <p id="progress"></p>
 <p><img src=\"""" + project + """.png"></p>
 <p><img src=\"""" + project + """_rel.png"></p>
@@ -135,17 +139,18 @@ if not os.path.isfile(gnuplotfilepath):
 
 proc = subprocess.Popen("gnuplot " + gnuplotfilepath + " >/dev/null", shell=True, stdout=subprocess.PIPE)
 if proc.wait() != 0:
-    print("gnuplot: something went wrong!");
+    print("gnuplot: something went wrong!")
     exit(1)
 
 proc = subprocess.Popen("gnuplot " + gnuplotfilepath_rel + " >/dev/null", shell=True, stdout=subprocess.PIPE)
 if proc.wait() != 0:
-    print("gnuplot: something went wrong!");
+    print("gnuplot: something went wrong!")
     exit(1)
 
 proc = subprocess.Popen("scp " + htmlfilepath + " " + datadir + project + ".png " + datadir + project + "_rel.png " + sshserver, shell=True, stdout=subprocess.PIPE)
 if proc.wait() != 0:
-    print("scp: something went wrong!");
+    print("scp: something went wrong!")
     exit(1)
 
+print('texstatistics finished successfully')
 
